@@ -50,7 +50,7 @@ public class MIPSAssembler {
             System.out.println("Usage: java MIPSAssembler <MIPS instruction>");
             return;
         }
-  String instruction = String.join(" ", args).split("#")[0].trim(); // Remove comments MIPS instruction
+  String instruction = String.join(" ", args).split("#")[0].trim(); // Remove comments MIPS instruction comments we put on t
         int machineCode = assembleLine(instruction);
         System.out.printf("%08x%n", machineCode);
     }
