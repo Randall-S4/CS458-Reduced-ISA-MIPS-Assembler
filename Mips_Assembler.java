@@ -54,3 +54,28 @@ public class MIPSAssembler {
         int machineCode = assembleLine(instruction);
         System.out.printf("%08x%n", machineCode);
     }
+ // Assemble line into machine code
+    private static int assembleLine(String line) {
+        String[] parts = line.split("[,\\s]+");
+        String opcode = parts[0].toLowerCase();
+
+        if (functionMap.containsKey(opcode)) {
+            return assembleR(parts);
+        } else if (opcodeMap.containsKey(opcode)) {
+            if (opcode.equals("addiu") || opcode.equals("andi") || opcode.equals("ori")) {
+                return assembleIImmediate(parts);
+            } else if (opcode.equals("beq") || opcode.equals("bne")) {
+                return assembleIBranch(parts);
+            } else if (opcode.equals("lui")) {
+                return assembleILui(parts);
+            } else if (opcode.equals("lw") || opcode.equals("sw")) {
+                return assembleIMemory(parts);
+            } else if (opcode.equals("j")) {
+                return assembleJ(parts);
+            } else if (opcode.equals("syscall")) {
+                return 12; // Fixed machine code for syscall
+            }
+        }
+        System.out.println("Unknown instruction: " + opcode);
+        return 0;
+    }
