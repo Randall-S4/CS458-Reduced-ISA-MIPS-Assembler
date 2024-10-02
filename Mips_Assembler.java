@@ -58,7 +58,26 @@ public class MIPSAssembler {
     private static int assembleLine(String line) {
         String[] parts = line.split("[,\\s]+");
         String opcode = parts[0].toLowerCase();
+        // R-type instructions
+        if (functionMap.containsKey(opcode)) {
+            return assembleRType(opcode, parts);
+        }
+        // Invalid instruction
+        else {
+            throw new IllegalArgumentException("Invalid instruction: " + line);
+        }
+
 
    
     }
+
+    private static int assembleRType(String opcode, String[] parts) {
+
+    }
+
+
+    }
+
+
+
 }
