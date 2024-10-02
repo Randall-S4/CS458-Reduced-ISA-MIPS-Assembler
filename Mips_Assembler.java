@@ -55,7 +55,7 @@ public class MIPSAssembler {
         System.out.printf("%08x%n", machineCode);
     }
  // Assemble line into machine code
-    private static int assembleLine(String line) {
+    static int assembleLine(String line) {
         String[] parts = line.split("[,\\s]+");
         String opcode = parts[0].toLowerCase();
         // R-type instructions
