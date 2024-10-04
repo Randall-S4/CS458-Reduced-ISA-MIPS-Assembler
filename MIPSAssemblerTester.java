@@ -30,7 +30,7 @@ public class MIPSAssemblerTester {
                 String assemblyLine = parts[1].split("#")[0].trim();  // Ignore comments
 
                 // Evaluate the assembly instruction using your assembler
-                int evaluatedMachineCode = MIPSAssembler.assembleLine(assemblyLine);
+                int evaluatedMachineCode = Mips_Assembler.assembleLine(assemblyLine);
                 String evaluatedHex = String.format("%08x", evaluatedMachineCode);
 
                 // Print the test result
