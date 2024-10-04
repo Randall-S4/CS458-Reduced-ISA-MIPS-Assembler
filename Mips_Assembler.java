@@ -64,6 +64,10 @@ public class Mips_Assembler {
         String[] parts = line.split("[,\\s]+");
         String opcode = parts[0].toLowerCase();
 
+        if (opcode.equals("syscall")) {
+            return 12; // Fixed machine code for syscall
+        }
+
         if (functionMap.containsKey(opcode)) {
             return assembleR(parts);
         } else if (opcodeMap.containsKey(opcode)) {
@@ -77,12 +81,11 @@ public class Mips_Assembler {
                 return assembleIMemory(parts);
             } else if (opcode.equals("j")) {
                 return assembleJ(parts);
-            } else if (opcode.equals("syscall")) {
-                return 12; // Fixed machine code for syscall
             }
         }
         System.out.println("Unknown instruction: " + opcode);
         return 0;
+
     }
 
     // R-type assembly
