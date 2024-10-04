@@ -3,7 +3,7 @@
 import java.util.HashMap;
 import java.util.Map;
 
-public class MIPSAssembler {
+public class Mips_Assembler {
 
     // Mappings for registers, opcodes, and functions
     private static final Map<String, Integer> registerMap = new HashMap<>();
