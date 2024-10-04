@@ -1,7 +1,6 @@
 import java.io.*;
-import java.util.Scanner;
 
-public class MipsAssemblerTester {
+public class MIPSAssemblerTester {
 
     public static void main(String[] args) {
         if (args.length != 1) {
@@ -20,8 +19,8 @@ public class MipsAssemblerTester {
             while ((line = br.readLine()) != null) {
                 lineNumber++;
 
-                // Ignore empty lines
-                if (line.trim().isEmpty()) {
+                // Ignore empty lines or lines starting with '#'
+                if (line.trim().isEmpty() || line.trim().startsWith("#")) {
                     continue;
                 }
 
@@ -31,7 +30,6 @@ public class MipsAssemblerTester {
                 String assemblyLine = parts[1].split("#")[0].trim();  // Ignore comments
 
                 // Evaluate the assembly instruction using your assembler
-                String[] instructionArgs = assemblyLine.split(" ");
                 int evaluatedMachineCode = MIPSAssembler.assembleLine(assemblyLine);
                 String evaluatedHex = String.format("%08x", evaluatedMachineCode);
 

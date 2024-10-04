@@ -1,4 +1,4 @@
-package defaul;
+//package defaul;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -48,19 +48,19 @@ public class MIPSAssembler {
     }
 
     // Entry point: assemble instruction from args
-    public static void main(String[] args) {
-        if (args.length == 0) {
-            System.out.println("Usage: java MIPSAssembler <MIPS instruction>");
-            return;
-        }
+   // public static void main(String[] args) {
+     //   if (args.length == 0) {
+       //     System.out.println("Usage: java MIPSAssembler <MIPS instruction>");
+         //   return;
+        //}
 
-        String instruction = String.join(" ", args).split("#")[0].trim(); // Remove comments
-        int machineCode = assembleLine(instruction);
-        System.out.printf("%08x%n", machineCode);
-    }
+        //String instruction = String.join(" ", args).split("#")[0].trim(); // Remove comments
+        //int machineCode = assembleLine(instruction);
+        //System.out.printf("%08x%n", machineCode);
+   // }
 
     // Assemble line into machine code
-    private static int assembleLine(String line) {
+    static int assembleLine(String line) {
         String[] parts = line.split("[,\\s]+");
         String opcode = parts[0].toLowerCase();
 
