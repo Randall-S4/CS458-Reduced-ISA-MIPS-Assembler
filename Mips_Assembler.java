@@ -132,8 +132,10 @@ public class Mips_Assembler {
     private static int assembleIMemory(String[] parts) {
         int opcode = opcodeMap.get(parts[0]);
         int rt = getRegister(parts[1]);
+
+        // Split the memory operand into offset and base register
         String[] offsetBase = parts[2].split("\\(|\\)");
-        int imm = parseImmediate(offsetBase[0]);
+        int imm = offsetBase[0].isEmpty() ? 0 : parseImmediate(offsetBase[0]);  // Handle missing offset
         int rs = getRegister(offsetBase[1]);
 
         return (opcode << 26) | (rs << 21) | (rt << 16) | (imm & 0xFFFF);
