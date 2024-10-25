@@ -1,15 +1,21 @@
 
 
-import java.util.HashMap;
-import java.util.Map;
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
 
-public class Mips_Assembler {
-
-    // Mappings for registers, opcodes, and functions
+public class MIPSAssembler {
+	  // Existing mappings from Milestone 1
     private static final Map<String, Integer> registerMap = new HashMap<>();
     private static final Map<String, Integer> opcodeMap = new HashMap<>();
     private static final Map<String, Integer> functionMap = new HashMap<>();
-
+    
+    // New mappings for labels and data
+    private static final Map<String, Integer> labelAddresses = new HashMap<>();
+    private static final Map<String, Integer> dataAddresses = new HashMap<>();
+    private static final int TEXT_START = 0x00400000;
+    private static final int DATA_START = 0x10010000;
+    
     static {
         // Register mappings
         String[] registers = {"zero", "at", "v0", "v1", "a0", "a1", "a2", "a3",
@@ -38,7 +44,7 @@ public class Mips_Assembler {
         opcodeMap.put("sw", 43);
         opcodeMap.put("syscall", 0);
 
-        // Function mappings for R-type instructions
+        // Function mappings
         functionMap.put("add", 32);
         functionMap.put("and", 36);
         functionMap.put("or", 37);
@@ -47,48 +53,220 @@ public class Mips_Assembler {
         functionMap.put("syscall", 12);
     }
 
-    // Entry point: assemble instruction from args
     public static void main(String[] args) {
-        if (args.length == 0) {
-            System.out.println("Usage: java MIPSAssembler <MIPS instruction>");
+        if (args.length != 1) {
+            System.out.println("Usage: java Mips_Assembler <input.asm>");
             return;
         }
 
-        String instruction = String.join(" ", args).split("#")[0].trim(); // Remove comments
-        int machineCode = assembleLine(instruction);
-        System.out.printf("%08x%n", machineCode);
+        try {
+            String inputFile = args[0];
+            List<String> lines = Files.readAllLines(Paths.get(inputFile));
+            processFile(inputFile, lines);
+        } catch (IOException e) {
+            System.err.println("Error reading file: " + e.getMessage());
+        }
     }
 
-    // Assemble line into machine code
-    static int assembleLine(String line) {
+    private static void processFile(String inputFile, List<String> lines) {
+        // Split into sections
+        List<String> dataSection = new ArrayList<>();
+        List<String> textSection = new ArrayList<>();
+        boolean inDataSection = false;
+        boolean inTextSection = false;
+
+        for (String line : lines) {
+            line = line.split("#")[0].trim(); // Remove comments
+            if (line.isEmpty()) continue;
+
+            if (line.equals(".data")) {
+                inDataSection = true;
+                inTextSection = false;
+            } else if (line.equals(".text")) {
+                inDataSection = false;
+                inTextSection = true;
+            } else if (inDataSection) {
+                dataSection.add(line);
+            } else if (inTextSection) {
+                textSection.add(line);
+            }
+        }
+
+        // Process sections
+        processDataSection(dataSection);
+        List<Integer> machineCode = processTextSection(textSection);
+
+        // Write output files
+        String baseName = inputFile.substring(0, inputFile.lastIndexOf('.'));
+        writeDataFile(baseName + ".data");
+        writeTextFile(baseName + ".text", machineCode);
+    }
+
+    private static void processDataSection(List<String> dataSection) {
+        int currentAddress = DATA_START;
+
+        for (String line : dataSection) {
+            if (line.contains(":")) {
+                String[] parts = line.split(":");
+                String label = parts[0].trim();
+                dataAddresses.put(label, currentAddress);
+
+                if (parts.length > 1) {
+                    String[] declaration = parts[1].trim().split("\\s+", 2);
+                    if (declaration[0].equals(".asciiz")) {
+                        // Extract string between quotes
+                        String str = declaration[1].trim();
+                        str = str.substring(1, str.length() - 1); // Remove quotes
+                        currentAddress += str.length() + 1; // +1 for null terminator
+                    }
+                }
+            }
+        }
+    }
+
+    private static List<Integer> processTextSection(List<String> textSection) {
+        // First pass: collect label addresses
+        int currentAddress = TEXT_START;
+        for (String line : textSection) {
+            line = line.trim();
+            if (line.isEmpty()) continue;
+
+            if (line.endsWith(":")) {
+                String label = line.substring(0, line.length() - 1).trim();
+                labelAddresses.put(label, currentAddress);
+            } else if (!line.contains(":")) {
+                // Count instructions for pseudo-instructions
+                String[] parts = line.split("\\s+");
+                String instruction = parts[0].toLowerCase();
+                if (isPseudoInstruction(instruction)) {
+                    currentAddress += getPseudoInstructionSize(instruction) * 4;
+                } else {
+                    currentAddress += 4;
+                }
+            }
+        }
+
+        // Second pass: generate machine code
+        List<Integer> machineCode = new ArrayList<>();
+        currentAddress = TEXT_START;
+        
+        for (String line : textSection) {
+            line = line.trim();
+            if (line.isEmpty() || line.endsWith(":")) continue;
+
+            if (line.contains(":")) {
+                line = line.split(":", 2)[1].trim();
+            }
+
+            String[] parts = line.split("\\s+");
+            String instruction = parts[0].toLowerCase();
+            
+            if (isPseudoInstruction(instruction)) {
+                machineCode.addAll(assemblePseudoInstruction(line, currentAddress));
+                currentAddress += getPseudoInstructionSize(instruction) * 4;
+            } else {
+                machineCode.add(assembleLine(line, currentAddress));
+                currentAddress += 4;
+            }
+        }
+
+        return machineCode;
+    }
+
+    private static boolean isPseudoInstruction(String instruction) {
+        return instruction.equals("li") || instruction.equals("la") || 
+               instruction.equals("move") || instruction.equals("blt");
+    }
+
+    private static int getPseudoInstructionSize(String instruction) {
+        switch (instruction) {
+            case "li": return 2;  // lui + ori
+            case "la": return 2;  // lui + ori
+            case "move": return 1; // add
+            case "blt": return 2;  // slt + bne
+            default: return 1;
+        }
+    }
+
+    private static List<Integer> assemblePseudoInstruction(String line, int currentAddress) {
+        List<Integer> result = new ArrayList<>();
+        String[] parts = line.split("[,\\s]+");
+        String instruction = parts[0].toLowerCase();
+
+        switch (instruction) {
+            case "li":
+                int value = parseImmediate(parts[2]);
+                int upper = (value >> 16) & 0xFFFF;
+                int lower = value & 0xFFFF;
+                if (upper != 0) {
+                    result.add(assembleILui(new String[]{"lui", parts[1], String.valueOf(upper)}));
+                }
+                result.add(assembleIImmediate(new String[]{"ori", parts[1], parts[1], String.valueOf(lower)}));
+                break;
+
+            case "la":
+                int address = dataAddresses.get(parts[2]);
+                upper = (address >> 16) & 0xFFFF;
+                lower = address & 0xFFFF;
+                result.add(assembleILui(new String[]{"lui", "$at", String.valueOf(upper)}));
+                result.add(assembleIImmediate(new String[]{"ori", parts[1], "$at", String.valueOf(lower)}));
+                break;
+
+            case "move":
+                result.add(assembleR(new String[]{"add", parts[1], "$zero", parts[2]}));
+                break;
+
+            case "blt":
+                String tempReg = "$at";
+                result.add(assembleR(new String[]{"slt", tempReg, parts[1], parts[2]}));
+                int offset = calculateBranchOffset(currentAddress + 4, labelAddresses.get(parts[3]));
+                result.add(assembleIBranch(new String[]{"bne", tempReg, "$zero", String.valueOf(offset)}));
+                break;
+        }
+
+        return result;
+    }
+
+    // Modified assembleLine to handle labels
+    private static int assembleLine(String line, int currentAddress) {
         String[] parts = line.split("[,\\s]+");
         String opcode = parts[0].toLowerCase();
 
         if (opcode.equals("syscall")) {
-            return 12; // Fixed machine code for syscall
+            return 12;
         }
 
         if (functionMap.containsKey(opcode)) {
             return assembleR(parts);
         } else if (opcodeMap.containsKey(opcode)) {
-            if (opcode.equals("addiu") || opcode.equals("andi") || opcode.equals("ori")) {
-                return assembleIImmediate(parts);
-            } else if (opcode.equals("beq") || opcode.equals("bne")) {
+            if (opcode.equals("beq") || opcode.equals("bne")) {
+                // Calculate branch offset
+                int targetAddress = labelAddresses.get(parts[3]);
+                int offset = calculateBranchOffset(currentAddress + 4, targetAddress);
+                parts[3] = String.valueOf(offset);
                 return assembleIBranch(parts);
+            } else if (opcode.equals("j")) {
+                // Calculate jump address
+                int targetAddress = labelAddresses.get(parts[1]);
+                parts[1] = String.valueOf(targetAddress >> 2);
+                return assembleJ(parts);
+            } else if (opcode.equals("addiu") || opcode.equals("andi") || opcode.equals("ori")) {
+                return assembleIImmediate(parts);
             } else if (opcode.equals("lui")) {
                 return assembleILui(parts);
             } else if (opcode.equals("lw") || opcode.equals("sw")) {
                 return assembleIMemory(parts);
-            } else if (opcode.equals("j")) {
-                return assembleJ(parts);
             }
         }
-        System.out.println("Unknown instruction: " + opcode);
+        
         return 0;
-
     }
 
-    // R-type assembly
+    private static int calculateBranchOffset(int fromAddress, int toAddress) {
+        return ((toAddress - fromAddress) / 4);
+    }
+
+    // Existing assembly methods from Milestone 1
     private static int assembleR(String[] parts) {
         int rs = getRegister(parts[2]);
         int rt = getRegister(parts[3]);
@@ -96,10 +274,9 @@ public class Mips_Assembler {
         int shamt = 0;
         int funct = functionMap.get(parts[0]);
 
-        return (0 << 26) | (rs << 21) | (rt << 16) | (rd << 11) | (shamt << 6) | funct; // Build 32-bit machine code for R-type 
+        return (0 << 26) | (rs << 21) | (rt << 16) | (rd << 11) | (shamt << 6) | funct;
     }
 
-    // I-type assembly for immediate operations
     private static int assembleIImmediate(String[] parts) {
         int opcode = opcodeMap.get(parts[0]);
         int rs = getRegister(parts[2]);
@@ -109,7 +286,6 @@ public class Mips_Assembler {
         return (opcode << 26) | (rs << 21) | (rt << 16) | (imm & 0xFFFF);
     }
 
-    // I-type assembly for branch operations
     private static int assembleIBranch(String[] parts) {
         int opcode = opcodeMap.get(parts[0]);
         int rs = getRegister(parts[1]);
@@ -119,7 +295,6 @@ public class Mips_Assembler {
         return (opcode << 26) | (rs << 21) | (rt << 16) | (imm & 0xFFFF);
     }
 
-    // I-type assembly for LUI
     private static int assembleILui(String[] parts) {
         int opcode = opcodeMap.get(parts[0]);
         int rt = getRegister(parts[1]);
@@ -128,20 +303,17 @@ public class Mips_Assembler {
         return (opcode << 26) | (rt << 16) | (imm & 0xFFFF);
     }
 
-    // I-type assembly for memory operations
     private static int assembleIMemory(String[] parts) {
         int opcode = opcodeMap.get(parts[0]);
         int rt = getRegister(parts[1]);
 
-        // Split the memory operand into offset and base register
         String[] offsetBase = parts[2].split("\\(|\\)");
-        int imm = offsetBase[0].isEmpty() ? 0 : parseImmediate(offsetBase[0]);  // Handle missing offset
+        int imm = offsetBase[0].isEmpty() ? 0 : parseImmediate(offsetBase[0]);
         int rs = getRegister(offsetBase[1]);
 
         return (opcode << 26) | (rs << 21) | (rt << 16) | (imm & 0xFFFF);
     }
 
-    // J-type assembly
     private static int assembleJ(String[] parts) {
         int opcode = opcodeMap.get(parts[0]);
         int address = parseImmediate(parts[1]);
@@ -149,17 +321,46 @@ public class Mips_Assembler {
         return (opcode << 26) | (address & 0x3FFFFFF);
     }
 
-    // helper to Get register number
     private static int getRegister(String reg) {
         return registerMap.getOrDefault(reg, 0);
     }
 
-    // Helper to Parse immediate values
     private static int parseImmediate(String imm) {
-        if (imm.startsWith("0x")) {
-            return Integer.parseInt(imm.substring(2), 16);
-        } else {
-            return Integer.parseInt(imm);
+        try {
+            if (imm.startsWith("0x")) {
+                return Integer.parseInt(imm.substring(2), 16);
+            } else {
+                return Integer.parseInt(imm);
+            }
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    // Write output files
+    private static void writeDataFile(String filename) {
+        try (PrintWriter writer = new PrintWriter(filename)) {
+            // Write data section in little-endian format
+            for (Map.Entry<String, Integer> entry : dataAddresses.entrySet()) {
+                @SuppressWarnings("unused")
+				String label = entry.getKey();
+                // Write the actual data...
+                // This is a simplified version - you'll need to implement the actual data writing
+                writer.println("00000000");
+            }
+        } catch (IOException e) {
+            System.err.println("Error writing data file: " + e.getMessage());
+        }
+    }
+
+    private static void writeTextFile(String filename, List<Integer> machineCode) {
+        try (PrintWriter writer = new PrintWriter(filename)) {
+            for (int instruction : machineCode) {
+                writer.printf("%08x%n", instruction);
+            }
+        } catch (IOException e) {
+            System.err.println("Error writing text file: " + e.getMessage());
         }
     }
 }
+
