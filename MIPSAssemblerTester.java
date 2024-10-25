@@ -1,60 +1,51 @@
 import java.io.*;
 
 public class MIPSAssemblerTester {
+public static void main(String[] args) {
 
-    public static void main(String[] args) {
-        if (args.length != 1) {
-            System.out.println("Usage: java MIPSAssemblerTester <testfile>");
-            return;
-        }
+    String asmFilePath = "EvenOrOdd.asm"; 
+        String expectedTextFilePath = "EvenOrOdd.text";
+        String expectedDataFilePath = "EvenOrOdd.data";
 
-        String testFile = args[0];
+        try {
+            // Step 1: Run the assembler on the ASM file
+            System.out.println("Running MIPS Assembler...");
+            MIPSAssembler.main(new String[]{asmFilePath});
 
-        try (BufferedReader br = new BufferedReader(new FileReader(testFile))) {
-            String line;
-            int lineNumber = 0;
-            int passedTests = 0;
-            int failedTests = 0;
+            // Step 2: Validate the .text and .data files
+            boolean textMatch = compareFiles("EvenOrOdd.text", expectedTextFilePath);
+            boolean dataMatch = compareFiles("EvenOrOdd.data", expectedDataFilePath);
 
-            while ((line = br.readLine()) != null) {
-                lineNumber++;
-
-                // Ignore empty lines or lines starting with '#'
-                if (line.trim().isEmpty() || line.trim().startsWith("#")) {
-                    continue;
-                }
-
-                // Split the line into the expected machine code and the assembly instruction
-                String[] parts = line.split(" ", 2);
-                String expectedHex = parts[0].trim();
-                String assemblyLine = parts[1].split("#")[0].trim();  // Ignore comments
-
-                // Evaluate the assembly instruction using the assembler
-                int evaluatedMachineCode = Mips_Assembler.assembleLine(assemblyLine);
-                String evaluatedHex = String.format("%08x", evaluatedMachineCode);
-
-                // Print the test result
-                System.out.println("Testing line: " + assemblyLine);
-                System.out.println("Evaluated output: " + evaluatedHex);
-                System.out.println("Expected output:  " + expectedHex);
-
-                // Compare expected with evaluated output
-                if (evaluatedHex.equals(expectedHex)) {
-                    System.out.println("Output is correct\n");
-                    passedTests++;
-                } else {
-                    System.out.println("Output is incorrect\n");
-                    failedTests++;
-                }
+            // Step 3: Print results
+            if (textMatch && dataMatch) {
+                System.out.println("All tests passed! Output matches expected results.");
+            } else {
+                System.out.println("Tests failed:");
+                if (!textMatch) System.out.println("Mismatch in .text section.");
+                if (!dataMatch) System.out.println("Mismatch in .data section.");
             }
-
-            // Summary of tests
-            System.out.println("Total tests: " + (passedTests + failedTests));
-            System.out.println("Passed tests: " + passedTests);
-            System.out.println("Failed tests: " + failedTests);
-
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    // Helper method to compare two files line by line
+    private static boolean compareFiles(String generatedFilePath, String expectedFilePath) throws IOException {
+        List<String> generatedLines = Files.readAllLines(Paths.get(generatedFilePath));
+        List<String> expectedLines = Files.readAllLines(Paths.get(expectedFilePath));
+
+        if (generatedLines.size() != expectedLines.size()) {
+            return false; // Files have different lengths
+        }
+
+        for (int i = 0; i < generatedLines.size(); i++) {
+            if (!generatedLines.get(i).equals(expectedLines.get(i))) {
+                System.out.println("Mismatch at line " + (i + 1));
+                System.out.println("Generated: " + generatedLines.get(i));
+                System.out.println("Expected:  " + expectedLines.get(i));
+                return false;
+            }
+        }
+        return true;
     }
 }
