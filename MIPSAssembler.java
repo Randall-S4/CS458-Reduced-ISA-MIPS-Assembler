@@ -54,18 +54,22 @@ public class MIPSAssembler {
     }
 
     public static void main(String[] args) {
-        if (args.length != 1) {
-            System.out.println("Usage: java Mips_Assembler <input.asm>");
-            return;
-        }
+  if (args.length != 1) {
+    	        System.out.println("Usage: java MIPSAssembler <input.asm>");
+    	        return;
+    	    }
 
-        try {
-            String inputFile = args[0];
-            List<String> lines = Files.readAllLines(Paths.get(inputFile));
-            processFile(inputFile, lines);
-        } catch (IOException e) {
-            System.err.println("Error reading file: " + e.getMessage());
-        }
+    	    try {
+    	        String inputFile = args[0];
+    	        System.out.println("Reading input file: " + inputFile);
+
+    	        List<String> lines = Files.readAllLines(Paths.get(inputFile));
+    	        processFile(inputFile, lines);
+    	        
+    	        System.out.println("Assembler completed successfully.");
+    	    } catch (IOException e) {
+    	        System.err.println("Error reading file: " + e.getMessage());
+    	    }
     }
 
     private static void processFile(String inputFile, List<String> lines) {
@@ -354,13 +358,14 @@ public class MIPSAssembler {
     }
 
     private static void writeTextFile(String filename, List<Integer> machineCode) {
-        try (PrintWriter writer = new PrintWriter(filename)) {
-            for (int instruction : machineCode) {
-                writer.printf("%08x%n", instruction);
-            }
-        } catch (IOException e) {
-            System.err.println("Error writing text file: " + e.getMessage());
-        }
+     	  try (PrintWriter writer = new PrintWriter(filename)) {
+    	        for (int instruction : machineCode) {
+    	            writer.printf("%08x%n", instruction);
+    	        }
+    	        System.out.println("Successfully wrote to: " + filename);  
+    	    } catch (IOException e) {
+    	        System.err.println("Error writing text file: " + e.getMessage());
+    	    }
     }
 }
 
