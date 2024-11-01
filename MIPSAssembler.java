@@ -13,6 +13,8 @@ public class MIPSAssembler {
     // New mappings for labels and data
     private static final Map<String, Integer> labelAddresses = new HashMap<>();
     private static final Map<String, Integer> dataAddresses = new HashMap<>();
+
+    private static final List<Byte> dataBytes = new ArrayList<>();
     private static final int TEXT_START = 0x00400000;
     private static final int DATA_START = 0x10010000;
     
@@ -114,7 +116,6 @@ public class MIPSAssembler {
                 String[] parts = line.split(":");
                 String label = parts[0].trim();
                 dataAddresses.put(label, currentAddress);
-
                 if (parts.length > 1) {
                     String[] declaration = parts[1].trim().split("\\s+", 2);
                     if (declaration[0].equals(".asciiz")) {
@@ -122,6 +123,17 @@ public class MIPSAssembler {
                         String str = declaration[1].trim();
                         str = str.substring(1, str.length() - 1); // Remove quotes
                         currentAddress += str.length() + 1; // +1 for null terminator
+
+                        byte [] asciiBytes = str.getBytes();
+                        int i = 0;
+
+                        for(byte b : asciiBytes){
+                            System.out.println(STR."\{i} \{(char)b}");
+                            int index = 3 - (i % 4);
+                            ++i;
+                            dataBytes.add(b);
+                        }
+                        dataBytes.add((byte)0);
                     }
                 }
             }
@@ -344,14 +356,24 @@ public class MIPSAssembler {
     // Write output files
     private static void writeDataFile(String filename) {
         try (PrintWriter writer = new PrintWriter(filename)) {
-            // Write data section in little-endian format
-            for (Map.Entry<String, Integer> entry : dataAddresses.entrySet()) {
-                @SuppressWarnings("unused")
-				String label = entry.getKey();
-                // Write the actual data...
-                // This is a simplified version - you'll need to implement the actual data writing
-                writer.println("00000000");
+            Byte [] dataLine = new Byte[4];
+            int i = 0;
+            for (byte b : dataBytes){
+                int index = 3 - (i%4);
+                dataLine[index] = b;
+                if( index == 0 ){
+                    String b0 = String.format("%02x",dataLine[0]);
+                    String b1 = String.format("%02x",dataLine[1]);
+                    String b2 = String.format("%02x",dataLine[2]);
+                    String b3 = String.format("%02x%n",dataLine[3]);
+                    String dataString = b0 + b1+ b2 +b3;
+                    //Byte line = Byte.valueOf(dataString);
+                    writer.printf(dataString);
+                    dataLine = new Byte[4];
+                }
+                ++i;
             }
+
         } catch (IOException e) {
             System.err.println("Error writing data file: " + e.getMessage());
         }
