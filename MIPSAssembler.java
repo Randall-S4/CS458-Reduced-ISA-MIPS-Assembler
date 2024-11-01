@@ -113,7 +113,7 @@ public class MIPSAssembler {
 
         for (String line : dataSection) {
             if (line.contains(":")) {
-                String[] parts = line.split(":");
+                String[] parts = line.split(":",2);
                 String label = parts[0].trim();
                 dataAddresses.put(label, currentAddress);
                 if (parts.length > 1) {
