@@ -122,7 +122,7 @@ public class MIPSAssembler {
                         // Extract string between quotes
                         String str = declaration[1].trim();
                         str = str.substring(1, str.length() - 1); // Remove quotes
-                        currentAddress += str.length() + 1; // +1 for null terminator
+                        currentAddress +=  1; // +1 for null terminator
 
                         byte [] asciiBytes = str.getBytes();
                         int i = 0;
