@@ -129,7 +129,6 @@ public class MIPSAssembler {
 
                         for(byte b : asciiBytes){
                             System.out.println(STR."\{i} \{(char)b}");
-                            int index = 3 - (i % 4);
                             ++i;
                             dataBytes.add(b);
                         }
