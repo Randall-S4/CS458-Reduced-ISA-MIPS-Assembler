@@ -354,11 +354,13 @@ public class MIPSAssembler {
 
     // Write output files
     private static void writeDataFile(String filename) {
+        List<String> output = new ArrayList<>();
         try (PrintWriter writer = new PrintWriter(filename)) {
             Byte [] dataLine = new Byte[4];
             int i = 0;
             for (byte b : dataBytes){
                 int index = 3 - (i%4);
+                // [ 4, 3, 2, 1]
                 dataLine[index] = b;
                 if( index == 0 ){
                     String b0 = String.format("%02x",dataLine[0]);
@@ -368,9 +370,15 @@ public class MIPSAssembler {
                     String dataString = b0 + b1+ b2 +b3;
                     //Byte line = Byte.valueOf(dataString);
                     writer.printf(dataString);
+                    output.add(dataString);
                     dataLine = new Byte[4];
                 }
                 ++i;
+            }
+            // Ensure the output has 1024 lines by padding with zeroes
+            while (output.size() < 1024) {
+                output.add("00000000");
+                writer.printf("00000000%n");
             }
 
         } catch (IOException e) {
