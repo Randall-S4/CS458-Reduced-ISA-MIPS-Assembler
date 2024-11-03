@@ -89,7 +89,7 @@ public class MIPSAssembler {
 
             String label = parts[0].trim();
             String[] declaration = parts[1].trim().split("\\s+", 2);
-            
+
             if (declaration.length < 2) continue;
 
             dataLabels.put(label, currentAddress);
@@ -98,34 +98,36 @@ public class MIPSAssembler {
 
             if (type.equals(".asciiz")) {
                 // Remove quotes and process string
-                String str = data.substring(1, data.length() - 1);
-                byte[] bytes = (str + "\0").getBytes();
-                
+                String str = data.substring(1, data.length() - 1) + "\0"; // Append null terminator
+                byte[] bytes = str.getBytes();
+
                 // Convert to little-endian words
                 for (int i = 0; i < bytes.length; i += 4) {
                     int word = 0;
-                    for (int j = 0; j < 4 && i + j < bytes.length; j++) {
-                        word |= (bytes[i + j] & 0xFF) << (j * 8);
+                    for (int j = 0; j < 4; j++) {
+                        if (i + j < bytes.length) {
+                            word |= (bytes[i + j] & 0xFF) << (j * 8);
+                        }
                     }
                     output.add(String.format("%08x", word));
                 }
-                
+
+                // Align to the next 4-byte boundary
                 currentAddress += ((bytes.length + 3) / 4) * 4;
             }
         }
 
         // Pad to match MARS output
-        while (output.size() < 600) {
+        while (output.size() < 1024) {
             output.add("00000000");
         }
 
         return output;
     }
 
-    private static List<String> processTextSection(List<String> textSection) {
-        List<String> output = new ArrayList<>();
+    private static List<String> processTextSection(List<String> textSection) {List<String> output = new ArrayList<>();
         int currentAddress = TEXT_START;
-        
+
         // First pass: collect text labels
         for (int i = 0; i < textSection.size(); i++) {
             String line = textSection.get(i);
@@ -137,45 +139,40 @@ public class MIPSAssembler {
                 line = line.substring(line.indexOf(":") + 1).trim();
                 if (line.isEmpty()) continue;
             }
-            
-            // Account for pseudo-instructions that expand to multiple instructions
-            if (line.startsWith("li ")) currentAddress += 8;
-            else if (line.startsWith("la ")) currentAddress += 8;
+
+            if (line.startsWith("li ") || line.startsWith("la ")) currentAddress += 8;
             else currentAddress += 4;
         }
 
-        // Second pass: generate machine code
         currentAddress = TEXT_START;
         for (String line : textSection) {
             if (line.isEmpty() || line.startsWith("#")) continue;
 
-            // Handle labels
             if (line.contains(":")) {
                 line = line.substring(line.indexOf(":") + 1).trim();
                 if (line.isEmpty()) continue;
             }
 
-            // Process instruction
             String[] parts = line.split("\\s+");
             String opcode = parts[0];
-
-            // Handle each instruction type
             int instruction = 0;
+
             switch (opcode) {
                 case "li":
-                    // Expand to lui + ori
                     int value = Integer.parseInt(parts[2]);
                     String reg = parts[1];
-                    int upper = (value >> 16) & 0xFFFF;
-                    int lower = value & 0xFFFF;
-                    
-                    if (upper != 0) {
-                        instruction = 0x3C000000 | (getRegNumber(reg) << 16) | upper;
+                    if ((value & 0xFFFF0000) != 0) {  // Requires `lui`
+                        int upper = (value >> 16) & 0xFFFF;
+                        int lower = value & 0xFFFF;
+
+                        instruction = 0x3C000000 | (getRegNumber(reg) << 16) | upper;  // lui
                         output.add(String.format("%08x", instruction));
                         currentAddress += 4;
+
+                        instruction = 0x34000000 | (getRegNumber(reg) << 16) | lower;  // ori
+                    } else {
+                        instruction = 0x34000000 | (getRegNumber(reg) << 16) | value;  // ori
                     }
-                    
-                    instruction = 0x34000000 | (getRegNumber(reg) << 16) | (getRegNumber(reg) << 21) | lower;
                     break;
 
                 case "syscall":
@@ -186,11 +183,11 @@ public class MIPSAssembler {
                     String rd = parts[1].replace(",", "");
                     String rs = parts[2].replace(",", "");
                     String rt = parts[3];
-                    instruction = (getRegNumber(rs) << 21) | (getRegNumber(rt) << 16) | 
-                                (getRegNumber(rd) << 11) | 0x20;
+                    instruction = (getRegNumber(rs) << 21) | (getRegNumber(rt) << 16) |
+                            (getRegNumber(rd) << 11) | 0x20;
                     break;
 
-                // Add more instructions as needed
+                // Additional instruction handling here...
             }
 
             output.add(String.format("%08x", instruction));
