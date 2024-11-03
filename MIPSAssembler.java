@@ -138,8 +138,10 @@ public class MIPSAssembler {
     }
 
     private static List<Integer> processTextSection(List<String> textSection) {
-        // First pass: collect label addresses
         int currentAddress = TEXT_START;
+        List<Integer> machineCode = new ArrayList<>();
+
+        // First pass: collect label addresses
         for (String line : textSection) {
             line = line.trim();
             if (line.isEmpty()) continue;
@@ -148,7 +150,6 @@ public class MIPSAssembler {
                 String label = line.substring(0, line.length() - 1).trim();
                 labelAddresses.put(label, currentAddress);
             } else if (!line.contains(":")) {
-                // Count instructions for pseudo-instructions
                 String[] parts = line.split("\\s+");
                 String instruction = parts[0].toLowerCase();
                 if (isPseudoInstruction(instruction)) {
@@ -160,9 +161,7 @@ public class MIPSAssembler {
         }
 
         // Second pass: generate machine code
-        List<Integer> machineCode = new ArrayList<>();
         currentAddress = TEXT_START;
-
         for (String line : textSection) {
             line = line.trim();
             if (line.isEmpty() || line.endsWith(":")) continue;
@@ -175,10 +174,12 @@ public class MIPSAssembler {
             String instruction = parts[0].toLowerCase();
 
             if (isPseudoInstruction(instruction)) {
-                machineCode.addAll(assemblePseudoInstruction(line, currentAddress));
+                List<Integer> pseudoInstructions = assemblePseudoInstruction(line, currentAddress);
+                machineCode.addAll(pseudoInstructions);
                 currentAddress += getPseudoInstructionSize(instruction) * 4;
             } else {
-                machineCode.add(assembleLine(line, currentAddress));
+                int assembled = assembleLine(line, currentAddress);
+                machineCode.add(assembled);
                 currentAddress += 4;
             }
         }
@@ -193,10 +194,10 @@ public class MIPSAssembler {
 
     private static int getPseudoInstructionSize(String instruction) {
         switch (instruction) {
-            case "li": return 2;  // lui + ori
-            case "la": return 2;  // lui + ori
-            case "move": return 1; // add
-            case "blt": return 2;  // slt + bne
+            case "li": return 2;
+            case "la": return 2;
+            case "move": return 1;
+            case "blt": return 2;
             default: return 1;
         }
     }
@@ -209,61 +210,73 @@ public class MIPSAssembler {
         switch (instruction) {
             case "li":
                 int value = parseImmediate(parts[2]);
-                int upper = (value >> 16) & 0xFFFF;
-                int lower = value & 0xFFFF;
-                if (upper != 0) {
-                    result.add(assembleILui(new String[]{"lui", parts[1], String.valueOf(upper)}));
+                if (value >= -32768 && value <= 32767) {
+                    result.add(assembleIImmediate(new String[]
+                            {"addiu", parts[1], "$zero", String.valueOf(value)}));
+                } else {
+                    int upper = (value >> 16) & 0xFFFF;
+                    int lower = value & 0xFFFF;
+                    if (upper != 0) {
+                        result.add(assembleILui(new String[]{"lui",
+                                parts[1], String.valueOf(upper)}));
+                    }
+                    result.add(assembleIImmediate(new String[]{"ori",
+                            parts[1], parts[1], String.valueOf(lower)}));
                 }
-                result.add(assembleIImmediate(new String[]{"ori", parts[1], parts[1], String.valueOf(lower)}));
                 break;
 
             case "la":
                 int address = dataAddresses.get(parts[2]);
-                upper = (address >> 16) & 0xFFFF;
-                lower = address & 0xFFFF;
-                result.add(assembleILui(new String[]{"lui", "$at", String.valueOf(upper)}));
-                result.add(assembleIImmediate(new String[]{"ori", parts[1], "$at", String.valueOf(lower)}));
+                int upper = (address >> 16) & 0xFFFF;
+                int lower = address & 0xFFFF;
+                result.add(assembleILui(new String[]{"lui", "$at",
+                        String.valueOf(upper)}));
+                result.add(assembleIImmediate(new String[]{"ori",
+                        parts[1], "$at", String.valueOf(lower)}));
                 break;
 
             case "move":
-                result.add(assembleR(new String[]{"add", parts[1], "$zero", parts[2]}));
+                result.add(assembleR(new String[]{"add", parts[1],
+                        "$zero", parts[2]}));
                 break;
 
             case "blt":
                 String tempReg = "$at";
-                result.add(assembleR(new String[]{"slt", tempReg, parts[1], parts[2]}));
-                int offset = calculateBranchOffset(currentAddress + 4, labelAddresses.get(parts[3]));
-                result.add(assembleIBranch(new String[]{"bne", tempReg, "$zero", String.valueOf(offset)}));
+                result.add(assembleR(new String[]{"slt", tempReg,
+                        parts[1], parts[2]}));
+                int offset = calculateBranchOffset(currentAddress + 4,
+                        labelAddresses.get(parts[3]));
+                result.add(assembleIBranch(new String[]{"bne", tempReg,
+                        "$zero", String.valueOf(offset)}));
                 break;
         }
 
         return result;
     }
 
-    // Modified assembleLine to handle labels
     private static int assembleLine(String line, int currentAddress) {
         String[] parts = line.split("[,\\s]+");
         String opcode = parts[0].toLowerCase();
 
         if (opcode.equals("syscall")) {
-            return 12;
+            return 0x0000000c;
         }
 
         if (functionMap.containsKey(opcode)) {
             return assembleR(parts);
         } else if (opcodeMap.containsKey(opcode)) {
             if (opcode.equals("beq") || opcode.equals("bne")) {
-                // Calculate branch offset
                 int targetAddress = labelAddresses.get(parts[3]);
                 int offset = calculateBranchOffset(currentAddress + 4, targetAddress);
                 parts[3] = String.valueOf(offset);
                 return assembleIBranch(parts);
             } else if (opcode.equals("j")) {
-                // Calculate jump address
                 int targetAddress = labelAddresses.get(parts[1]);
-                parts[1] = String.valueOf(targetAddress >> 2);
+                int jumpAddress = (targetAddress & 0x0FFFFFFF) >> 2;
+                parts[1] = String.valueOf(jumpAddress);
                 return assembleJ(parts);
-            } else if (opcode.equals("addiu") || opcode.equals("andi") || opcode.equals("ori")) {
+            } else if (opcode.equals("addiu") || opcode.equals("andi") ||
+                    opcode.equals("ori")) {
                 return assembleIImmediate(parts);
             } else if (opcode.equals("lui")) {
                 return assembleILui(parts);
@@ -271,7 +284,6 @@ public class MIPSAssembler {
                 return assembleIMemory(parts);
             }
         }
-
         return 0;
     }
 
@@ -279,15 +291,14 @@ public class MIPSAssembler {
         return ((toAddress - fromAddress) / 4);
     }
 
-    // Existing assembly methods from Milestone 1
     private static int assembleR(String[] parts) {
         int rs = getRegister(parts[2]);
         int rt = getRegister(parts[3]);
         int rd = getRegister(parts[1]);
         int shamt = 0;
         int funct = functionMap.get(parts[0]);
-
-        return (0 << 26) | (rs << 21) | (rt << 16) | (rd << 11) | (shamt << 6) | funct;
+        return (0 << 26) | (rs << 21) | (rt << 16) | (rd << 11) |
+                (shamt << 6) | funct;
     }
 
     private static int assembleIImmediate(String[] parts) {
@@ -295,7 +306,6 @@ public class MIPSAssembler {
         int rs = getRegister(parts[2]);
         int rt = getRegister(parts[1]);
         int imm = parseImmediate(parts[3]);
-
         return (opcode << 26) | (rs << 21) | (rt << 16) | (imm & 0xFFFF);
     }
 
@@ -304,7 +314,6 @@ public class MIPSAssembler {
         int rs = getRegister(parts[1]);
         int rt = getRegister(parts[2]);
         int imm = parseImmediate(parts[3]);
-
         return (opcode << 26) | (rs << 21) | (rt << 16) | (imm & 0xFFFF);
     }
 
@@ -312,25 +321,21 @@ public class MIPSAssembler {
         int opcode = opcodeMap.get(parts[0]);
         int rt = getRegister(parts[1]);
         int imm = parseImmediate(parts[2]);
-
         return (opcode << 26) | (rt << 16) | (imm & 0xFFFF);
     }
 
     private static int assembleIMemory(String[] parts) {
         int opcode = opcodeMap.get(parts[0]);
         int rt = getRegister(parts[1]);
-
         String[] offsetBase = parts[2].split("\\(|\\)");
         int imm = offsetBase[0].isEmpty() ? 0 : parseImmediate(offsetBase[0]);
         int rs = getRegister(offsetBase[1]);
-
         return (opcode << 26) | (rs << 21) | (rt << 16) | (imm & 0xFFFF);
     }
 
     private static int assembleJ(String[] parts) {
         int opcode = opcodeMap.get(parts[0]);
         int address = parseImmediate(parts[1]);
-
         return (opcode << 26) | (address & 0x3FFFFFF);
     }
 
@@ -395,4 +400,3 @@ public class MIPSAssembler {
         }
     }
 }
-
